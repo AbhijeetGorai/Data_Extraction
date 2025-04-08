@@ -16,32 +16,30 @@ uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True
 # Hardcoded prompt
 prompt = "Please extract structured information from the document."
 
-# Prepare results storage
-results = []
-
 if st.button("Generate"):
     if not email or not access_token:
         st.error("Please enter Email ID and Access Token.")
     elif not uploaded_files:
         st.error("Please upload at least one document.")
     else:
-        # Replace with your actual API endpoint
+        results = []  # Reset results for each run
+
+        # API endpoint
         api_url = "https://your-api-endpoint.com/process"
 
         with st.spinner("Processing documents..."):
             for file in uploaded_files:
                 try:
-                    # Prepare single file
+                    # Reset file read position before reading
+                    file.seek(0)
                     files = [("file", (file.name, file.read(), file.type))]
 
-                    # Form data
                     data = {
                         "access_token": access_token,
                         "email": email,
                         "prompt": prompt
                     }
 
-                    # Call API
                     response = requests.post(api_url, data=data, files=files)
 
                     try:
@@ -54,39 +52,38 @@ if st.button("Generate"):
                         parsed_json = json.loads(cleaned)
                         pretty_json = json.dumps(parsed_json, indent=4)
 
-                        # Show result
+                        # Show result for each file
                         st.success(f"Processed: {file_name}")
                         st.code(pretty_json, language="json")
 
-                        # Store for Excel
+                        # Save for Excel
                         results.append({
                             "File Name": file_name,
                             "Extracted JSON": pretty_json
                         })
 
                     except Exception as e:
-                        st.error(f"Error parsing result for {file.name}")
+                        st.error(f"Error parsing JSON from API for: {file.name}")
                         st.code(response.text)
                         st.exception(e)
 
                 except Exception as e:
-                    st.error(f"API error with file: {file.name}")
+                    st.error(f"API call failed for: {file.name}")
                     st.exception(e)
 
-        # Generate Excel if we have results
+        # If results collected, prepare download
         if results:
             df = pd.DataFrame(results)
 
-            # Convert DataFrame to Excel in-memory
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df.to_excel(writer, index=False, sheet_name='Extracted Data')
+            output.seek(0)
 
-            # Create download button
-            st.markdown("### Download Results")
+            st.markdown("### 📥 Download All Extracted Data")
             st.download_button(
-                label="📥 Download Excel",
-                data=output.getvalue(),
+                label="Download Excel File",
+                data=output,
                 file_name="extracted_data.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
