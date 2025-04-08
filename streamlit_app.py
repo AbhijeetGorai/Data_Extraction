@@ -22,19 +22,23 @@ Similarly you will handle all the different Invoice types.
 ii)Name of the Particulars - Passenger Name or Customer Name
 When mentioning the value, strictly check for the following things:
 1)If name is not specifically mentioned, you wil check for the passenger or customer name in the Invoice.
-2)First Letter of the Name should always be in Capital Letters.
-3)Always keep Mr or Mrs as appropriate in the front of the name.
+For Example: In Invoices like cabs, customer name will be often written with a Thanks message.
+2)For invoices like cabs, you will never pick a name written with string "You rode with".
+3)You will always keep First Letter of the Name should always be in Capital Letters.
+For Example: If name is written like "manas", you will format it as "Manas".
+4)You will always keep Mr or Mrs as appropriate saluation in the front of the name.
+For Example: If name is written like "Mahendra", you will format it as "Mr Mahendra".
 iii)Date of Journey -
 	->Start Date - Date of Journey
 	->End Date - Date of Reaching Destination
-When mentioning the date, you will check for the following things:
+When mentioning the date, you will strictly check for the following things:
 1)Always keep date in the format: <dd> <Month> <Year>.
 For Example: If date is mentioned as "Mon, 03 Feb 2025", then you should format as "03 Feb 2025"
 If date is mentioned as "2025-03-21", then you should format as "21 Mar 2025"
 iv)Time of Journey - 
 	->Start Time - Time of starting the journey on the date of journey
 	->End Time - Time of reaching the destination
-When mentioning the time,you will check for the following things:
+When mentioning the time,you will strictly check for the following things:
 1)Always keep time in the 12 hour format and with AM or PM
 For Example: If time is mentioned as 18:15, then you should format as 6:15 PM (In 12 hour format).
 If time is mentioned as 9:00 then you should format as 9:00 AM and if time is mentioned as 1:00 then you should format as 1:00 PM.
