@@ -4,13 +4,12 @@ import json
 import pandas as pd
 from io import BytesIO
 
-st.title("📄 Batch Document Processor with Excel Export + Table View")
+st.title("📄 Batch Document Processor with Table & Excel Export")
 
-# Auth input
+# Authentication
 email = "abhijeet.gorai@origamis.ai"
 access_token = "gAAAAABnhKC-u2n1_mSWDlroFECWdd_qqplTHfPnplQncjC0B4A-oSxMplEf117Zd0uXSmiJKX-hS9UalpqS3CkQDmvGbhhKIvvfBt4QiBgOliL7_vl_FncrR9YkqLOTg5cL0T3pBOeNYpy5kEXbdgH9jAPJWP2yBw=="
-
-# File upload
+# File uploader
 uploaded_files = st.file_uploader("Upload multiple documents", accept_multiple_files=True, type=["pdf", "docx", "txt"])
 
 # Hardcoded prompt
@@ -46,15 +45,18 @@ v)Total Cost - Total payable amount
 4. Remove the '\n' and '\t' characters from the output JSON structure
 """
 
-# When Generate is clicked
+# Button to trigger processing
 if st.button("Generate"):
     if not email or not access_token:
         st.error("Please enter both Email ID and Access Token.")
     elif not uploaded_files:
         st.error("Please upload at least one document.")
     else:
-        api_url = "https://neptune.origamis.ai:9001/gear/process"  # Replace with real API URL
+        api_url = "https://neptune.origamis.ai:9001/gear/process"  # Replace with your actual API URL
         extracted_data = []
+
+        # Reset the page state only when new processing happens
+        st.session_state.page = 1
 
         with st.spinner("Processing all documents..."):
             for uploaded_file in uploaded_files:
@@ -73,14 +75,15 @@ if st.button("Generate"):
                     file_name = result.get("message", {}).get("fileName", uploaded_file.name)
                     answer_raw = result.get("message", {}).get("answer", "")
 
-                    # Clean and parse
+                    # Clean markdown-style JSON
                     cleaned = answer_raw.replace("```json", "").replace("```", "").strip()
+
                     try:
                         parsed = json.loads(cleaned)
                         formatted = json.dumps(parsed, indent=4)
                         extracted_json = formatted
                     except json.JSONDecodeError:
-                        extracted_json = cleaned  # fallback
+                        extracted_json = cleaned  # fallback to raw cleaned content
 
                     extracted_data.append({
                         "File Name": file_name,
@@ -93,33 +96,43 @@ if st.button("Generate"):
                         "Extracted JSON": f"ERROR: {str(e)}"
                     })
 
-        # Show table and download
         if extracted_data:
             df = pd.DataFrame(extracted_data)
-
             st.success("✅ All documents processed successfully!")
 
-            # 📊 Table preview
+            # -----------------------------
+            # 📊 Paginated Table Preview
+            # -----------------------------
+
             st.markdown("### 📊 Extracted Results (Preview)")
+
+            if "page" not in st.session_state:
+                st.session_state.page = 1
 
             page_size = 5
             total_rows = len(df)
             total_pages = (total_rows + page_size - 1) // page_size
 
             if total_pages > 1:
-                page = st.selectbox(
+                selected_page = st.selectbox(
                     "Select page to view:",
                     options=list(range(1, total_pages + 1)),
-                    format_func=lambda x: f"Page {x} of {total_pages}"
+                    index=st.session_state.page - 1,
+                    format_func=lambda x: f"Page {x} of {total_pages}",
+                    key="page_selectbox"
                 )
+                st.session_state.page = selected_page
             else:
-                page = 1
+                st.session_state.page = 1
 
-            start = (page - 1) * page_size
+            start = (st.session_state.page - 1) * page_size
             end = start + page_size
             st.dataframe(df.iloc[start:end], use_container_width=True)
 
-            # 📥 Excel export
+            # -----------------------------
+            # 📥 Excel Export
+            # -----------------------------
+
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df.to_excel(writer, index=False, sheet_name='Extracted Results')
@@ -133,4 +146,4 @@ if st.button("Generate"):
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
         else:
-            st.warning("No data was extracted from the uploaded documents.")
+            st.warning("No data was extracted.")
