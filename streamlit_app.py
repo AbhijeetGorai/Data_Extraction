@@ -23,7 +23,7 @@ if st.button("Generate"):
         files = [("files", (f.name, f, f.type)) for f in uploaded_files]
 
         # API endpoint
-        api_url = "https://your-api-endpoint.com/process"  # Replace with your actual URL
+        api_url = "https://neptune.origamis.ai:9001/gear/process"  # Replace with your actual URL
 
         # Headers for authentication
         headers = {
