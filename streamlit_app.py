@@ -20,12 +20,25 @@ If the Invoice is of a Flight, you will respond with "FLIGHT_REIMBURSEMENT".
 Similarly If the Invoice is of a Hotel, you will respond with "HOTEL_REIMBURSEMENT".
 Similarly you will handle all the different Invoice types.
 ii)Name of the Particulars - Passenger Name or Customer Name
+When mentioning the value, strictly check for the following things:
+1)If name is not specifically mentioned, you wil check for the passenger or customer name in the Invoice.
+2)First Letter of the Name should always be in Capital Letters.
+3)Always keep Mr or Mrs as appropriate in the front of the name.
 iii)Date of Journey -
 	->Start Date - Date of Journey
 	->End Date - Date of Reaching Destination
+When mentioning the date, you will check for the following things:
+1)Always keep date in the format: <dd> <Month> <Year>.
+For Example: If date is mentioned as "Mon, 03 Feb 2025", then you should format as "03 Feb 2025"
+If date is mentioned as "2025-03-21", then you should format as "21 Mar 2025"
 iv)Time of Journey - 
 	->Start Time - Time of starting the journey on the date of journey
 	->End Time - Time of reaching the destination
+When mentioning the time,you will check for the following things:
+1)Always keep time in the 12 hour format and with AM or PM
+For Example: If time is mentioned as 18:15, then you should format as 6:15 PM (In 12 hour format).
+If time is mentioned as 9:00 then you should format as 9:00 AM and if time is mentioned as 1:00 then you should format as 1:00 PM.
+2)If time not specifically mentioned, then you should keep 'None'.
 v)Total Cost - Total payable amount
 3.Generate a single JSON object in the below format only:
 {
