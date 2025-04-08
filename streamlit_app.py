@@ -1,30 +1,63 @@
 import streamlit as st
 import requests
+import json
 
 st.title("Document Processor")
 
-# Auth and input fields
+# Auth inputs
 email = st.text_input("Email ID")
 access_token = st.text_input("Access Token", type="password")
-prompt = st.text_area("Enter your prompt")
 
 # File uploader
 uploaded_files = st.file_uploader("Upload your documents", accept_multiple_files=True, type=["pdf", "docx", "txt"])
 
+# Hardcoded prompt
+prompt = """
+1.You are Finance Manager who oversee the reimbursement process in the company.
+2.Your task is to extract the following details from the Invoices:
+i)Type of Reimbursement - 
+If the Invoice is of a Flight, you will respond with "FLIGHT_REIMBURSEMENT".
+Similarly If the Invoice is of a Hotel, you will respond with "HOTEL_REIMBURSEMENT".
+Similarly you will handle all the different Invoice types.
+ii)Name of the Particulars - Passenger Name or Customer Name
+iii)Date of Journey -
+	->Start Date - Date of Journey
+	->End Date - Date of Reaching Destination
+iv)Time of Journey - 
+	->Start Time - Time of starting the journey on the date of journey
+	->End Time - Time of reaching the destination
+v)Total Cost - Total payable amount
+3.Generate a single JSON object in the below format only:
+{
+	"Type of Reimbursement" : {},
+	"Name of the Particulars" : {},
+	"Date of Journey" : [
+		"Start Date" :
+		"End Date" :
+	]
+	"Time of Journey" : [ 
+		"Start Time" :
+		"End Time" :
+	],
+	"Total Cost"
+}
+"""
+4. Remove the '\n' and '\t' characters from the output JSON structure"
+
 # Generate button
 if st.button("Generate"):
-    if not email or not access_token or not prompt:
-        st.error("Please fill in Email, Access Token, and Prompt.")
+    if not email or not access_token:
+        st.error("Please fill in Email ID and Access Token.")
     elif not uploaded_files:
         st.error("Please upload at least one document.")
     else:
         try:
-            # Prepare files for multipart upload
+            # Prepare files
             files = []
             for f in uploaded_files:
                 files.append(("file", (f.name, f.read(), f.type)))
 
-            # Add form fields (text values)
+            # Prepare form data
             data = {
                 "access_token": access_token,
                 "email": email,
@@ -32,21 +65,38 @@ if st.button("Generate"):
             }
 
             # API endpoint
-            api_url = "https://neptune.origamis.ai:9001/gear/process"  # 🔁 Replace this
+            api_url = "https://dataextraction-gear.streamlit.app/"  # <-- replace with real API URL
 
             with st.spinner("Processing..."):
                 response = requests.post(api_url, data=data, files=files)
 
             if response.status_code == 200:
-                st.success("Documents processed successfully!")
-                st.markdown("### Result:")
                 try:
-                    st.json(response.json())
-                except Exception:
-                    st.write(response.text)
+                    result = response.json()
+                    answer_raw = result.get("message", {}).get("answer", "")
+
+                    # Clean the markdown formatting
+                    cleaned_json_str = (
+                        answer_raw.replace("```json", "")
+                        .replace("```", "")
+                        .strip()
+                    )
+
+                    # Try parsing and reformatting the JSON
+                    parsed_json = json.loads(cleaned_json_str)
+                    pretty_json = json.dumps(parsed_json, indent=4)
+
+                    st.success("Processed successfully!")
+                    st.markdown("### Extracted Information")
+                    st.code(pretty_json, language="json")
+
+                except Exception as e:
+                    st.error("Failed to parse the API response.")
+                    st.exception(e)
             else:
                 st.error(f"Error {response.status_code}")
                 st.write(response.text)
+
         except Exception as e:
-            st.error("Something went wrong with the API call.")
+            st.error("Something went wrong during the API call.")
             st.exception(e)
