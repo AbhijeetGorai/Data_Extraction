@@ -9,6 +9,7 @@ st.title("📄 Batch Document Processor with Table & Excel Export")
 # Authentication
 email = "abhijeet.gorai@origamis.ai"
 access_token = "gAAAAABnhKC-u2n1_mSWDlroFECWdd_qqplTHfPnplQncjC0B4A-oSxMplEf117Zd0uXSmiJKX-hS9UalpqS3CkQDmvGbhhKIvvfBt4QiBgOliL7_vl_FncrR9YkqLOTg5cL0T3pBOeNYpy5kEXbdgH9jAPJWP2yBw=="
+
 # File uploader
 uploaded_files = st.file_uploader("Upload multiple documents", accept_multiple_files=True, type=["pdf", "docx", "txt"])
 
@@ -45,20 +46,25 @@ v)Total Cost - Total payable amount
 4. Remove the '\n' and '\t' characters from the output JSON structure
 """
 
-# Button to trigger processing
+# Initialize session state storage
+if "data_ready" not in st.session_state:
+    st.session_state.data_ready = False
+if "df_results" not in st.session_state:
+    st.session_state.df_results = pd.DataFrame()
+if "page" not in st.session_state:
+    st.session_state.page = 1
+
+# Process files on Generate
 if st.button("Generate"):
     if not email or not access_token:
         st.error("Please enter both Email ID and Access Token.")
     elif not uploaded_files:
         st.error("Please upload at least one document.")
     else:
-        api_url = "https://neptune.origamis.ai:9001/gear/process"  # Replace with your actual API URL
+        api_url = "https://neptune.origamis.ai:9001/gear/process"  # Replace with actual API URL
         extracted_data = []
 
-        # Reset the page state only when new processing happens
-        st.session_state.page = 1
-
-        with st.spinner("Processing all documents..."):
+        with st.spinner("Processing documents..."):
             for uploaded_file in uploaded_files:
                 try:
                     uploaded_file.seek(0)
@@ -83,7 +89,7 @@ if st.button("Generate"):
                         formatted = json.dumps(parsed, indent=4)
                         extracted_json = formatted
                     except json.JSONDecodeError:
-                        extracted_json = cleaned  # fallback to raw cleaned content
+                        extracted_json = cleaned  # fallback to raw string
 
                     extracted_data.append({
                         "File Name": file_name,
@@ -96,54 +102,50 @@ if st.button("Generate"):
                         "Extracted JSON": f"ERROR: {str(e)}"
                     })
 
-        if extracted_data:
-            df = pd.DataFrame(extracted_data)
-            st.success("✅ All documents processed successfully!")
+        # Save result to session state
+        st.session_state.df_results = pd.DataFrame(extracted_data)
+        st.session_state.data_ready = True
+        st.session_state.page = 1  # Reset to page 1 after processing
 
-            # -----------------------------
-            # 📊 Paginated Table Preview
-            # -----------------------------
+# Show table and download if data exists
+if st.session_state.data_ready and not st.session_state.df_results.empty:
+    df = st.session_state.df_results
 
-            st.markdown("### 📊 Extracted Results (Preview)")
+    st.success("✅ All documents processed!")
 
-            if "page" not in st.session_state:
-                st.session_state.page = 1
+    # Paginated view
+    st.markdown("### 📊 Extracted Results Preview")
 
-            page_size = 5
-            total_rows = len(df)
-            total_pages = (total_rows + page_size - 1) // page_size
+    page_size = 5
+    total_rows = len(df)
+    total_pages = (total_rows + page_size - 1) // page_size
 
-            if total_pages > 1:
-                selected_page = st.selectbox(
-                    "Select page to view:",
-                    options=list(range(1, total_pages + 1)),
-                    index=st.session_state.page - 1,
-                    format_func=lambda x: f"Page {x} of {total_pages}",
-                    key="page_selectbox"
-                )
-                st.session_state.page = selected_page
-            else:
-                st.session_state.page = 1
+    if total_pages > 1:
+        selected_page = st.selectbox(
+            "Select page to view:",
+            options=list(range(1, total_pages + 1)),
+            index=st.session_state.page - 1,
+            format_func=lambda x: f"Page {x} of {total_pages}",
+            key="page_selector"
+        )
+        st.session_state.page = selected_page
+    else:
+        st.session_state.page = 1
 
-            start = (st.session_state.page - 1) * page_size
-            end = start + page_size
-            st.dataframe(df.iloc[start:end], use_container_width=True)
+    start = (st.session_state.page - 1) * page_size
+    end = start + page_size
+    st.dataframe(df.iloc[start:end], use_container_width=True)
 
-            # -----------------------------
-            # 📥 Excel Export
-            # -----------------------------
+    # Excel export
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Extracted Results')
+    output.seek(0)
 
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                df.to_excel(writer, index=False, sheet_name='Extracted Results')
-            output.seek(0)
-
-            st.markdown("### 📥 Download Extracted Data")
-            st.download_button(
-                label="Download Excel File",
-                data=output,
-                file_name="extracted_data.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        else:
-            st.warning("No data was extracted.")
+    st.markdown("### 📥 Download Extracted Data")
+    st.download_button(
+        label="Download Excel File",
+        data=output,
+        file_name="extracted_data.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
