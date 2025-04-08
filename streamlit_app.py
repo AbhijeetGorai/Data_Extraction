@@ -29,16 +29,16 @@ iv)Time of Journey -
 v)Total Cost - Total payable amount
 3.Generate a single JSON object in the below format only:
 {
-	"Type of Reimbursement" : {},
-	"Name of the Particulars" : {},
-	"Date of Journey" : [
-		"Start Date" :
-		"End Date" :
-	]
-	"Time of Journey" : [ 
-		"Start Time" :
-		"End Time" :
-	],
+	"Type of Reimbursement",
+	"Name of the Particulars",
+	"Date of Journey" : {
+		"Start Date"
+		"End Date"
+	},
+	"Time of Journey" : { 
+		"Start Time"
+		"End Time"
+	},
 	"Total Cost"
 }
 4. Remove the '\n' and '\t' characters from the output JSON structure
