@@ -41,8 +41,9 @@ v)Total Cost - Total payable amount
 	],
 	"Total Cost"
 }
-4. Remove the '\n' and '\t' characters from the output JSON structure"
+4. Remove the '\n' and '\t' characters from the output JSON structure
 """
+
 # Generate button
 if st.button("Generate"):
     if not email or not access_token:
@@ -56,7 +57,7 @@ if st.button("Generate"):
             for f in uploaded_files:
                 files.append(("file", (f.name, f.read(), f.type)))
 
-            # Prepare form data
+            # Form data
             data = {
                 "access_token": access_token,
                 "email": email,
@@ -64,37 +65,47 @@ if st.button("Generate"):
             }
 
             # API endpoint
-            api_url = "https://dataextraction-gear.streamlit.app/"  # <-- replace with real API URL
+            api_url = "https://dataextraction-gear.streamlit.app/"  # 🔁 Replace this
 
-            with st.spinner("Processing..."):
+            with st.spinner("Calling API..."):
                 response = requests.post(api_url, data=data, files=files)
 
-            if response.status_code == 200:
-                try:
-                    result = response.json()
-                    answer_raw = result.get("message", {}).get("answer", "")
+            # Try extracting JSON content
+            try:
+                api_result = response.json()
+            except json.JSONDecodeError:
+                st.error("API did not return valid JSON.")
+                st.code(response.text)
+                st.stop()
 
-                    # Clean the markdown formatting
-                    cleaned_json_str = (
-                        answer_raw.replace("```json", "")
-                        .replace("```", "")
-                        .strip()
-                    )
+            # Extract the 'answer' field
+            answer_raw = api_result.get("message", {}).get("answer", None)
 
-                    # Try parsing and reformatting the JSON
-                    parsed_json = json.loads(cleaned_json_str)
-                    pretty_json = json.dumps(parsed_json, indent=4)
+            if not answer_raw:
+                st.warning("No answer found in API response.")
+                st.json(api_result)
+                st.stop()
 
-                    st.success("Processed successfully!")
-                    st.markdown("### Extracted Information")
-                    st.code(pretty_json, language="json")
+            # Clean markdown-style formatting
+            cleaned_json_str = (
+                answer_raw.replace("```json", "")
+                .replace("```", "")
+                .strip()
+            )
 
-                except Exception as e:
-                    st.error("Failed to parse the API response.")
-                    st.exception(e)
-            else:
-                st.error(f"Error {response.status_code}")
-                st.write(response.text)
+            # Try parsing the cleaned string into JSON
+            try:
+                parsed_json = json.loads(cleaned_json_str)
+                pretty_json = json.dumps(parsed_json, indent=4)
+
+                st.success("Structured Result Extracted:")
+                st.code(pretty_json, language="json")
+
+            except Exception as e:
+                st.error("Couldn't parse the 'answer' content as JSON.")
+                st.text("Raw content:")
+                st.code(cleaned_json_str)
+                st.exception(e)
 
         except Exception as e:
             st.error("Something went wrong during the API call.")
