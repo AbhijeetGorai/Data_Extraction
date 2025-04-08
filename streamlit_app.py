@@ -30,6 +30,8 @@ For Example: If name is written like "manas", you will format it as "Manas".
 For Example: If name is written like "Mahendra", you will format it as "Mr Mahendra".
 5)You will always mention name in the format: <Salutation> <First Name> <Surname>
 For Example: If name is written like "Agarwal Manas", you will format it as "Mr Manas Agarwal".
+6)If more than one name is mentioned in the Invoice, then you will mention both the names <name1> and <name2> and <name N>
+For Example: If 2 names Ram,Shyam is mentioned in the Invoice, you will format as "Ram and Shyam".
 iii)Date of Journey -
 	->Start Date - Date of Journey
 	->End Date - Date of Reaching Destination
