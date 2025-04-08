@@ -4,13 +4,13 @@ import json
 import pandas as pd
 from io import BytesIO
 
-st.title("📄 Document Processor with Excel Export")
+st.title("📄 Batch Document Processor (Excel Export Only)")
 
-# User credentials
+# Auth inputs
 email = st.text_input("Email ID")
 access_token = st.text_input("Access Token", type="password")
 
-# File upload
+# File uploader
 uploaded_files = st.file_uploader("Upload multiple documents", accept_multiple_files=True, type=["pdf", "docx", "txt"])
 
 # Hardcoded prompt
@@ -18,19 +18,18 @@ prompt = "Please extract structured information from the document."
 
 if st.button("Generate"):
     if not email or not access_token:
-        st.error("Please fill in both Email ID and Access Token.")
+        st.error("Please enter Email ID and Access Token.")
     elif not uploaded_files:
         st.error("Please upload at least one document.")
     else:
-        api_url = "https://your-api-endpoint.com/process"  # Replace with actual API
+        api_url = "https://your-api-endpoint.com/process"  # Replace with your actual endpoint
         extracted_data = []
 
-        with st.spinner("Processing documents..."):
+        with st.spinner("Processing all documents..."):
             for uploaded_file in uploaded_files:
                 try:
                     uploaded_file.seek(0)
                     files = [("file", (uploaded_file.name, uploaded_file.read(), uploaded_file.type))]
-
                     data = {
                         "access_token": access_token,
                         "email": email,
@@ -43,48 +42,45 @@ if st.button("Generate"):
                     file_name = result.get("message", {}).get("fileName", uploaded_file.name)
                     answer_raw = result.get("message", {}).get("answer", "")
 
-                    # Clean markdown
+                    # Clean markdown wrapping
                     cleaned = answer_raw.replace("```json", "").replace("```", "").strip()
 
+                    # Try to parse JSON
                     try:
-                        parsed_json = json.loads(cleaned)
-                        pretty_json = json.dumps(parsed_json, indent=4)
-                        st.success(f"✅ {file_name}")
-                        st.code(pretty_json, language="json")
-                        extracted_json = pretty_json
-                    except Exception as json_error:
-                        st.warning(f"⚠️ Failed to parse JSON for {file_name}")
-                        st.text("Showing raw answer instead:")
-                        st.code(cleaned)
-                        extracted_json = cleaned  # fallback to raw string
+                        parsed = json.loads(cleaned)
+                        formatted = json.dumps(parsed, indent=4)
+                        extracted_json = formatted
+                    except json.JSONDecodeError:
+                        extracted_json = cleaned  # fallback to raw cleaned string
 
-                    # Save result even if parsing fails
+                    # Append to final results
                     extracted_data.append({
                         "File Name": file_name,
                         "Extracted JSON": extracted_json
                     })
 
                 except Exception as e:
-                    st.error(f"Error processing {uploaded_file.name}")
-                    st.exception(e)
+                    extracted_data.append({
+                        "File Name": uploaded_file.name,
+                        "Extracted JSON": f"ERROR: {str(e)}"
+                    })
 
-        # Export to Excel
+        # Display and download after all processing
         if extracted_data:
             df = pd.DataFrame(extracted_data)
 
-            try:
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    df.to_excel(writer, index=False, sheet_name='Results')
-                output.seek(0)
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False, sheet_name='Extracted Results')
+            output.seek(0)
 
-                st.markdown("### 📥 Download Extracted Data")
-                st.download_button(
-                    label="Download Excel File",
-                    data=output,
-                    file_name="extracted_data.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            except Exception as e:
-                st.error("Failed to generate Excel file.")
-                st.exception(e)
+            st.success("✅ All files processed.")
+            st.markdown("### 📥 Download Extracted Results")
+            st.download_button(
+                label="Download Excel File",
+                data=output,
+                file_name="extracted_data.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            st.warning("No data to export.")
