@@ -42,7 +42,7 @@ v)Total Cost - Total payable amount
 4. Remove the '\n' and '\t' characters from the output JSON structure
 """
 
-# Init session state
+# Session state
 if "data_ready" not in st.session_state:
     st.session_state.data_ready = False
 if "df_results" not in st.session_state:
@@ -50,10 +50,9 @@ if "df_results" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = 1
 
-# Helper to flatten nested JSON
+# Flatten nested JSON
 def flatten_json(data):
     flat = {}
-
     for key, value in data.items():
         if isinstance(value, dict):
             for subkey, subvalue in value.items():
@@ -63,10 +62,9 @@ def flatten_json(data):
                 flat[f"{key} - {subkey}"] = subvalue
         else:
             flat[key] = value
-
     return flat
 
-# Process files
+# Generate button
 if st.button("Generate"):
     if not email or not access_token:
         st.error("Please enter both Email ID and Access Token.")
@@ -74,9 +72,9 @@ if st.button("Generate"):
         st.error("Please upload at least one document.")
     else:
         api_url = "https://neptune.origamis.ai:9001/gear/process"  # Replace with your actual API URL
-        final_rows = []
+        rows = []
 
-        st.session_state.page = 1  # Reset page
+        st.session_state.page = 1  # Reset pagination
         with st.spinner("Processing..."):
             for uploaded_file in uploaded_files:
                 try:
@@ -99,33 +97,37 @@ if st.button("Generate"):
                     try:
                         parsed = json.loads(cleaned)
                         flat_data = flatten_json(parsed)
+                        flat_data["File Name"] = file_name
                     except Exception as e:
-                        flat_data = {"ERROR": f"Could not parse JSON: {str(e)}"}
+                        flat_data = {
+                            "File Name": file_name,
+                            "ERROR": f"Could not parse JSON: {str(e)}"
+                        }
 
-                    flat_data["File Name"] = file_name
-                    final_rows.append(flat_data)
+                    rows.append(flat_data)
 
                 except Exception as e:
-                    final_rows.append({
+                    rows.append({
                         "File Name": uploaded_file.name,
                         "ERROR": f"API Error: {str(e)}"
                     })
 
-        # Convert to DataFrame
-        df = pd.DataFrame(final_rows)
-        df = df[["File Name"] + [col for col in df.columns if col != "File Name"]]  # File Name first
+        df = pd.DataFrame(rows)
+        # Move "File Name" to front
+        cols = ["File Name"] + [col for col in df.columns if col != "File Name"]
+        df = df[cols]
 
         st.session_state.df_results = df
         st.session_state.data_ready = True
 
-# Show results
+# Display table + download
 if st.session_state.data_ready and not st.session_state.df_results.empty:
     df = st.session_state.df_results
 
     st.success("✅ Processing complete!")
 
-    # Paginated view
-    st.markdown("### 📊 Extracted Results (Flattened View)")
+    # Paginated table
+    st.markdown("### 📊 Extracted Results (Flattened)")
     page_size = 5
     total_rows = len(df)
     total_pages = (total_rows + page_size - 1) // page_size
@@ -146,7 +148,7 @@ if st.session_state.data_ready and not st.session_state.df_results.empty:
     end = start + page_size
     st.dataframe(df.iloc[start:end], use_container_width=True)
 
-    # Excel export
+    # Excel download
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Extracted Results')
