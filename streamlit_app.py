@@ -37,6 +37,7 @@ When mentioning the date, you will strictly check for the following things:
 1)Always keep date in the format: <dd> <Month> <Year>.
 For Example: If date is mentioned as "Mon, 03 Feb 2025", then you should format as "03 Feb 2025"
 If date is mentioned as "2025-03-21", then you should format as "21 Mar 2025"
+2)If Start Date or End Date is not specifically mentioned in the Invoice, then you will keep it as None.
 iv)Time of Journey - 
 	->Start Time - Time of starting the journey on the date of journey
 	->End Time - Time of reaching the destination
