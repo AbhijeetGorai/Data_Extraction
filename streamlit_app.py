@@ -6,7 +6,7 @@ from io import BytesIO
 import re
 import demjson3
 
-st.title("📄 Document Processor with Raw JSON, Table & Excel Export")
+st.title("📄 Data Extraction")
 
 # Auth inputs
 email = "abhijeet.gorai@origamis.ai"
