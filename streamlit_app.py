@@ -3,8 +3,9 @@ import requests
 import json
 import pandas as pd
 from io import BytesIO
+import re
 
-st.title("📄 Document Processor with Flattened Table & Excel Export")
+st.title("📄 Document Processor with JSON Fix, Table & Excel Export")
 
 # Auth inputs
 email = "abhijeet.gorai@origamis.ai"
@@ -50,7 +51,7 @@ if "df_results" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = 1
 
-# Flatten nested JSON
+# 🔧 Helper to flatten nested JSON
 def flatten_json(data):
     flat = {}
     for key, value in data.items():
@@ -64,6 +65,22 @@ def flatten_json(data):
             flat[key] = value
     return flat
 
+# 🔧 JSON Repair Helper
+def try_fix_json(broken_json_str):
+    # Remove markdown and common junk
+    cleaned = broken_json_str.replace("```json", "").replace("```", "").strip()
+    cleaned = re.sub(r'\\n', '', cleaned)
+    cleaned = re.sub(r'\s+', ' ', cleaned)
+    cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)  # remove trailing commas
+
+    try:
+        return json.loads(cleaned)
+    except Exception as e:
+        return {
+            "Raw Answer": cleaned,
+            "ERROR": f"Could not fully parse JSON: {str(e)}"
+        }
+
 # Generate button
 if st.button("Generate"):
     if not email or not access_token:
@@ -74,8 +91,9 @@ if st.button("Generate"):
         api_url = "https://neptune.origamis.ai:9001/gear/process"  # Replace with your actual API URL
         rows = []
 
-        st.session_state.page = 1  # Reset pagination
-        with st.spinner("Processing..."):
+        st.session_state.page = 1  # Reset page
+
+        with st.spinner("Processing all documents..."):
             for uploaded_file in uploaded_files:
                 try:
                     uploaded_file.seek(0)
@@ -92,18 +110,16 @@ if st.button("Generate"):
                     file_name = result.get("message", {}).get("fileName", uploaded_file.name)
                     answer_raw = result.get("message", {}).get("answer", "")
 
-                    cleaned = answer_raw.replace("```json", "").replace("```", "").strip()
+                    # ✅ Auto-fix and parse
+                    parsed = try_fix_json(answer_raw)
 
-                    try:
-                        parsed = json.loads(cleaned)
+                    # ✅ Flatten if valid
+                    if "ERROR" in parsed:
+                        flat_data = parsed
+                    else:
                         flat_data = flatten_json(parsed)
-                        flat_data["File Name"] = file_name
-                    except Exception as e:
-                        flat_data = {
-                            "File Name": file_name,
-                            "ERROR": f"Could not parse JSON: {str(e)}"
-                        }
 
+                    flat_data["File Name"] = file_name
                     rows.append(flat_data)
 
                 except Exception as e:
@@ -112,22 +128,21 @@ if st.button("Generate"):
                         "ERROR": f"API Error: {str(e)}"
                     })
 
+        # Final table
         df = pd.DataFrame(rows)
-        # Move "File Name" to front
         cols = ["File Name"] + [col for col in df.columns if col != "File Name"]
         df = df[cols]
 
         st.session_state.df_results = df
         st.session_state.data_ready = True
 
-# Display table + download
+# UI Preview + Download
 if st.session_state.data_ready and not st.session_state.df_results.empty:
     df = st.session_state.df_results
 
-    st.success("✅ Processing complete!")
+    st.success("✅ All documents processed.")
 
-    # Paginated table
-    st.markdown("### 📊 Extracted Results (Flattened)")
+    st.markdown("### 📊 Extracted Results (Flattened View)")
     page_size = 5
     total_rows = len(df)
     total_pages = (total_rows + page_size - 1) // page_size
