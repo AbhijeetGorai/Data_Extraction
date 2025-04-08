@@ -4,8 +4,9 @@ import json
 import pandas as pd
 from io import BytesIO
 import re
+import demjson3
 
-st.title("📄 Document Processor with JSON Fix, Table & Excel Export")
+st.title("📄 Document Processor with Smart JSON Fixing + Excel Export")
 
 # Auth inputs
 email = "abhijeet.gorai@origamis.ai"
@@ -51,7 +52,7 @@ if "df_results" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = 1
 
-# 🔧 Helper to flatten nested JSON
+# 🔧 JSON Flatten Helper
 def flatten_json(data):
     flat = {}
     for key, value in data.items():
@@ -65,32 +66,26 @@ def flatten_json(data):
             flat[key] = value
     return flat
 
-# 🔧 JSON Repair Helper
+# 🔧 Smart JSON Fix using demjson3
 def try_fix_json(broken_json_str):
-    # Remove markdown and common junk
     cleaned = broken_json_str.replace("```json", "").replace("```", "").strip()
-    cleaned = re.sub(r'\\n', '', cleaned)
-    cleaned = re.sub(r'\s+', ' ', cleaned)
-    cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)  # remove trailing commas
-
     try:
-        return json.loads(cleaned)
+        return demjson3.decode(cleaned)
     except Exception as e:
         return {
             "Raw Answer": cleaned,
             "ERROR": f"Could not fully parse JSON: {str(e)}"
         }
 
-# Generate button
+# Button to process
 if st.button("Generate"):
     if not email or not access_token:
         st.error("Please enter both Email ID and Access Token.")
     elif not uploaded_files:
         st.error("Please upload at least one document.")
     else:
-        api_url = "https://neptune.origamis.ai:9001/gear/process"  # Replace with your actual API URL
+        api_url = "https://neptune.origamis.ai:9001/gear/process"  # Replace with actual endpoint
         rows = []
-
         st.session_state.page = 1  # Reset page
 
         with st.spinner("Processing all documents..."):
@@ -110,10 +105,9 @@ if st.button("Generate"):
                     file_name = result.get("message", {}).get("fileName", uploaded_file.name)
                     answer_raw = result.get("message", {}).get("answer", "")
 
-                    # ✅ Auto-fix and parse
+                    # ✅ Parse and auto-fix JSON
                     parsed = try_fix_json(answer_raw)
 
-                    # ✅ Flatten if valid
                     if "ERROR" in parsed:
                         flat_data = parsed
                     else:
@@ -128,7 +122,7 @@ if st.button("Generate"):
                         "ERROR": f"API Error: {str(e)}"
                     })
 
-        # Final table
+        # Build final DataFrame
         df = pd.DataFrame(rows)
         cols = ["File Name"] + [col for col in df.columns if col != "File Name"]
         df = df[cols]
@@ -136,10 +130,9 @@ if st.button("Generate"):
         st.session_state.df_results = df
         st.session_state.data_ready = True
 
-# UI Preview + Download
+# Show results
 if st.session_state.data_ready and not st.session_state.df_results.empty:
     df = st.session_state.df_results
-
     st.success("✅ All documents processed.")
 
     st.markdown("### 📊 Extracted Results (Flattened View)")
