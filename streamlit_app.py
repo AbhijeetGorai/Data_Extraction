@@ -6,7 +6,7 @@ from io import BytesIO
 import re
 import demjson3
 
-st.title("📄 Document Processor with Smart JSON Fixing + Excel Export")
+st.title("📄 Document Processor with Raw JSON, Table & Excel Export")
 
 # Auth inputs
 email = "abhijeet.gorai@origamis.ai"
@@ -52,7 +52,7 @@ if "df_results" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = 1
 
-# 🔧 JSON Flatten Helper
+# 🔧 Flatten nested JSON
 def flatten_json(data):
     flat = {}
     for key, value in data.items():
@@ -66,27 +66,24 @@ def flatten_json(data):
             flat[key] = value
     return flat
 
-# 🔧 Smart JSON Fix using demjson3
+# 🔧 JSON Repair using demjson3
 def try_fix_json(broken_json_str):
     cleaned = broken_json_str.replace("```json", "").replace("```", "").strip()
-    try:
-        return demjson3.decode(cleaned)
-    except Exception as e:
-        return {
-            "Raw Answer": cleaned,
-            "ERROR": f"Could not fully parse JSON: {str(e)}"
-        }
+    cleaned = re.sub(r'\\n', '', cleaned)
+    cleaned = re.sub(r'\s+', ' ', cleaned)
+    cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
+    return cleaned  # return cleaned raw string, demjson will handle parsing later
 
-# Button to process
+# Process files
 if st.button("Generate"):
     if not email or not access_token:
         st.error("Please enter both Email ID and Access Token.")
     elif not uploaded_files:
         st.error("Please upload at least one document.")
     else:
-        api_url = "https://neptune.origamis.ai:9001/gear/process"  # Replace with actual endpoint
+        api_url = "https://neptune.origamis.ai:9001/gear/process"  # Replace with your actual API
         rows = []
-        st.session_state.page = 1  # Reset page
+        st.session_state.page = 1
 
         with st.spinner("Processing all documents..."):
             for uploaded_file in uploaded_files:
@@ -104,14 +101,17 @@ if st.button("Generate"):
 
                     file_name = result.get("message", {}).get("fileName", uploaded_file.name)
                     answer_raw = result.get("message", {}).get("answer", "")
+                    raw_cleaned = try_fix_json(answer_raw)
 
-                    # ✅ Parse and auto-fix JSON
-                    parsed = try_fix_json(answer_raw)
-
-                    if "ERROR" in parsed:
-                        flat_data = parsed
-                    else:
+                    try:
+                        parsed = demjson3.decode(raw_cleaned)
                         flat_data = flatten_json(parsed)
+                        flat_data["Raw Answer"] = raw_cleaned
+                    except Exception as e:
+                        flat_data = {
+                            "ERROR": f"Could not fully parse JSON: {str(e)}",
+                            "Raw Answer": raw_cleaned
+                        }
 
                     flat_data["File Name"] = file_name
                     rows.append(flat_data)
@@ -119,23 +119,25 @@ if st.button("Generate"):
                 except Exception as e:
                     rows.append({
                         "File Name": uploaded_file.name,
-                        "ERROR": f"API Error: {str(e)}"
+                        "ERROR": f"API Error: {str(e)}",
+                        "Raw Answer": "N/A"
                     })
 
-        # Build final DataFrame
         df = pd.DataFrame(rows)
-        cols = ["File Name"] + [col for col in df.columns if col != "File Name"]
+        cols = ["File Name", "Raw Answer"] + [col for col in df.columns if col not in ["File Name", "Raw Answer"]]
         df = df[cols]
 
         st.session_state.df_results = df
         st.session_state.data_ready = True
 
-# Show results
+# Display UI
 if st.session_state.data_ready and not st.session_state.df_results.empty:
     df = st.session_state.df_results
+
     st.success("✅ All documents processed.")
 
-    st.markdown("### 📊 Extracted Results (Flattened View)")
+    st.markdown("### 📊 Extracted Results with Raw JSON")
+
     page_size = 5
     total_rows = len(df)
     total_pages = (total_rows + page_size - 1) // page_size
@@ -156,7 +158,7 @@ if st.session_state.data_ready and not st.session_state.df_results.empty:
     end = start + page_size
     st.dataframe(df.iloc[start:end], use_container_width=True)
 
-    # Excel download
+    # Download Excel
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Extracted Results')
