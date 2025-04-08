@@ -32,7 +32,7 @@ if st.button("Generate"):
             }
 
             # API endpoint
-            api_url = "https://your-api-endpoint.com/process"  # 🔁 Replace this
+            api_url = "https://neptune.origamis.ai:9001/gear/process"  # 🔁 Replace this
 
             with st.spinner("Processing..."):
                 response = requests.post(api_url, data=data, files=files)
