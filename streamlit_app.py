@@ -4,16 +4,12 @@ import json
 import pandas as pd
 from io import BytesIO
 
-st.title("📄 Batch Document Processor with Table & Excel Export")
+st.title("📄 Document Processor with Flattened Table & Excel Export")
 
-# Authentication
+# Auth inputs
 email = "abhijeet.gorai@origamis.ai"
 access_token = "gAAAAABnhKC-u2n1_mSWDlroFECWdd_qqplTHfPnplQncjC0B4A-oSxMplEf117Zd0uXSmiJKX-hS9UalpqS3CkQDmvGbhhKIvvfBt4QiBgOliL7_vl_FncrR9YkqLOTg5cL0T3pBOeNYpy5kEXbdgH9jAPJWP2yBw=="
-
-# File uploader
-uploaded_files = st.file_uploader("Upload multiple documents", accept_multiple_files=True, type=["pdf", "docx", "txt"])
-
-# Hardcoded prompt
+uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True, type=["pdf", "docx", "txt"])
 prompt = """
 1.You are Finance Manager who oversee the reimbursement process in the company.
 2.Your task is to extract the following details from the Invoices:
@@ -46,7 +42,7 @@ v)Total Cost - Total payable amount
 4. Remove the '\n' and '\t' characters from the output JSON structure
 """
 
-# Initialize session state storage
+# Init session state
 if "data_ready" not in st.session_state:
     st.session_state.data_ready = False
 if "df_results" not in st.session_state:
@@ -54,17 +50,34 @@ if "df_results" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = 1
 
-# Process files on Generate
+# Helper to flatten nested JSON
+def flatten_json(data):
+    flat = {}
+
+    for key, value in data.items():
+        if isinstance(value, dict):
+            for subkey, subvalue in value.items():
+                flat[f"{key} - {subkey}"] = subvalue
+        elif isinstance(value, list) and len(value) > 0 and isinstance(value[0], dict):
+            for subkey, subvalue in value[0].items():
+                flat[f"{key} - {subkey}"] = subvalue
+        else:
+            flat[key] = value
+
+    return flat
+
+# Process files
 if st.button("Generate"):
     if not email or not access_token:
         st.error("Please enter both Email ID and Access Token.")
     elif not uploaded_files:
         st.error("Please upload at least one document.")
     else:
-        api_url = "https://neptune.origamis.ai:9001/gear/process"  # Replace with actual API URL
-        extracted_data = []
+        api_url = "https://neptune.origamis.ai:9001/gear/process"  # Replace with your actual API URL
+        final_rows = []
 
-        with st.spinner("Processing documents..."):
+        st.session_state.page = 1  # Reset page
+        with st.spinner("Processing..."):
             for uploaded_file in uploaded_files:
                 try:
                     uploaded_file.seek(0)
@@ -81,48 +94,45 @@ if st.button("Generate"):
                     file_name = result.get("message", {}).get("fileName", uploaded_file.name)
                     answer_raw = result.get("message", {}).get("answer", "")
 
-                    # Clean markdown-style JSON
                     cleaned = answer_raw.replace("```json", "").replace("```", "").strip()
 
                     try:
                         parsed = json.loads(cleaned)
-                        formatted = json.dumps(parsed, indent=4)
-                        extracted_json = formatted
-                    except json.JSONDecodeError:
-                        extracted_json = cleaned  # fallback to raw string
+                        flat_data = flatten_json(parsed)
+                    except Exception as e:
+                        flat_data = {"ERROR": f"Could not parse JSON: {str(e)}"}
 
-                    extracted_data.append({
-                        "File Name": file_name,
-                        "Extracted JSON": extracted_json
-                    })
+                    flat_data["File Name"] = file_name
+                    final_rows.append(flat_data)
 
                 except Exception as e:
-                    extracted_data.append({
+                    final_rows.append({
                         "File Name": uploaded_file.name,
-                        "Extracted JSON": f"ERROR: {str(e)}"
+                        "ERROR": f"API Error: {str(e)}"
                     })
 
-        # Save result to session state
-        st.session_state.df_results = pd.DataFrame(extracted_data)
-        st.session_state.data_ready = True
-        st.session_state.page = 1  # Reset to page 1 after processing
+        # Convert to DataFrame
+        df = pd.DataFrame(final_rows)
+        df = df[["File Name"] + [col for col in df.columns if col != "File Name"]]  # File Name first
 
-# Show table and download if data exists
+        st.session_state.df_results = df
+        st.session_state.data_ready = True
+
+# Show results
 if st.session_state.data_ready and not st.session_state.df_results.empty:
     df = st.session_state.df_results
 
-    st.success("✅ All documents processed!")
+    st.success("✅ Processing complete!")
 
     # Paginated view
-    st.markdown("### 📊 Extracted Results Preview")
-
+    st.markdown("### 📊 Extracted Results (Flattened View)")
     page_size = 5
     total_rows = len(df)
     total_pages = (total_rows + page_size - 1) // page_size
 
     if total_pages > 1:
         selected_page = st.selectbox(
-            "Select page to view:",
+            "Select page:",
             options=list(range(1, total_pages + 1)),
             index=st.session_state.page - 1,
             format_func=lambda x: f"Page {x} of {total_pages}",
