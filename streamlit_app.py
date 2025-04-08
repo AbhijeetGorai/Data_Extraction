@@ -41,9 +41,8 @@ v)Total Cost - Total payable amount
 	],
 	"Total Cost"
 }
-"""
 4. Remove the '\n' and '\t' characters from the output JSON structure"
-
+"""
 # Generate button
 if st.button("Generate"):
     if not email or not access_token:
