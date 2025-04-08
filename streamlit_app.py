@@ -7,14 +7,44 @@ from io import BytesIO
 st.title("📄 Batch Document Processor with Excel Export + Preview")
 
 # Authentication
-email = st.text_input("Email ID")
-access_token = st.text_input("Access Token", type="password")
+email = "abhijeet.gorai@origamis.ai"
+access_token = "gAAAAABnhKC-u2n1_mSWDlroFECWdd_qqplTHfPnplQncjC0B4A-oSxMplEf117Zd0uXSmiJKX-hS9UalpqS3CkQDmvGbhhKIvvfBt4QiBgOliL7_vl_FncrR9YkqLOTg5cL0T3pBOeNYpy5kEXbdgH9jAPJWP2yBw=="
 
 # File upload
 uploaded_files = st.file_uploader("Upload multiple documents", accept_multiple_files=True, type=["pdf", "docx", "txt"])
 
 # Hardcoded prompt
-prompt = "Please extract structured information from the document."
+prompt = """
+1.You are Finance Manager who oversee the reimbursement process in the company.
+2.Your task is to extract the following details from the Invoices:
+i)Type of Reimbursement - 
+If the Invoice is of a Flight, you will respond with "FLIGHT_REIMBURSEMENT".
+Similarly If the Invoice is of a Hotel, you will respond with "HOTEL_REIMBURSEMENT".
+Similarly you will handle all the different Invoice types.
+ii)Name of the Particulars - Passenger Name or Customer Name
+iii)Date of Journey -
+	->Start Date - Date of Journey
+	->End Date - Date of Reaching Destination
+iv)Time of Journey - 
+	->Start Time - Time of starting the journey on the date of journey
+	->End Time - Time of reaching the destination
+v)Total Cost - Total payable amount
+3.Generate a single JSON object in the below format only:
+{
+	"Type of Reimbursement" : {},
+	"Name of the Particulars" : {},
+	"Date of Journey" : [
+		"Start Date" :
+		"End Date" :
+	]
+	"Time of Journey" : [ 
+		"Start Time" :
+		"End Time" :
+	],
+	"Total Cost"
+}
+4. Remove the '\n' and '\t' characters from the output JSON structure
+"""
 
 # Process on button click
 if st.button("Generate"):
@@ -23,7 +53,7 @@ if st.button("Generate"):
     elif not uploaded_files:
         st.error("Please upload at least one document.")
     else:
-        api_url = "https://your-api-endpoint.com/process"  # Replace with your actual API endpoint
+        api_url = "https://neptune.origamis.ai:9001/gear/process"  # Replace with your actual API endpoint
         extracted_data = []
 
         with st.spinner("Processing documents..."):
