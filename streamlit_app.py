@@ -40,6 +40,9 @@ For Example: If time is mentioned as 18:15, then you should format as 6:15 PM (I
 If time is mentioned as 9:00 then you should format as 9:00 AM and if time is mentioned as 1:00 then you should format as 1:00 PM.
 2)If time not specifically mentioned, then you should keep 'None'.
 v)Total Cost - Total payable amount
+When mentioning the value, you will check for the following things:
+1)Always keep the cost in the format: Rs <Amount>
+For Example: If cost is mentioned as INR 7760, then you should format as Rs 7760.
 3.Generate a single JSON object in the below format only:
 {
 	"Type of Reimbursement",
