@@ -7,7 +7,7 @@ import re
 import demjson3
 
 st.set_page_config(layout="wide")
-st.title("📄 Reimbursement Data Extraction & Validation")
+st.title("📄 Reimbursement Automation - With Rules")
 
 # Category selection
 category = st.selectbox("Select Reimbursement Category", ["L1 - Manager/Senior Manager", "L2 - Director and above"])
