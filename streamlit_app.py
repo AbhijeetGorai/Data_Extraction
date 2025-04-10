@@ -6,12 +6,13 @@ from io import BytesIO
 import re
 import demjson3
 
+st.set_page_config(layout="wide")
 st.title("📄 Reimbursement Data Extraction & Validation")
 
 # Category selection
 category = st.selectbox("Select Reimbursement Category", ["L1 - Manager/Senior Manager", "L2 - Director and above"])
 
-# Rules definition
+# Rules
 rules = {
     "L1 - Manager/Senior Manager": {
         "Travel": "Not allowed",
@@ -24,20 +25,18 @@ rules = {
         "Food (per day)": "Up to ₹1200"
     }
 }
-
-# Display rule table
 rules_df = pd.DataFrame(rules[category].items(), columns=["Category", "Limit"])
 st.markdown("### 🧾 Reimbursement Rules")
 st.table(rules_df)
 
-# Upload files
+# Upload
 uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True, type=["pdf", "docx", "txt"])
 
-# Credentials
+# Auth
 email = "abhijeet.gorai@origamis.ai"
 access_token = "gAAAAABnhKC-u2n1_mSWDlroFECWdd_qqplTHfPnplQncjC0B4A-oSxMplEf117Zd0uXSmiJKX-hS9UalpqS3CkQDmvGbhhKIvvfBt4QiBgOliL7_vl_FncrR9YkqLOTg5cL0T3pBOeNYpy5kEXbdgH9jAPJWP2yBw=="
 
-# Prompt (your long custom prompt)
+# Prompt (same as before)
 prompt = """
 1.You are Finance Manager who oversee the reimbursement process in the company.
 2.Your task is to extract the following details from the Invoices:
@@ -93,9 +92,9 @@ For Example: If cost is mentioned as INR 7760, then you should format as Rs 7760
 	"Total Cost"
 }
 4. Remove the '\n' and '\t' characters from the output JSON structure
-"""  # Replace with actual
+"""
 
-# Session state
+# Session
 if "data_ready" not in st.session_state:
     st.session_state.data_ready = False
 if "df_results" not in st.session_state:
@@ -103,7 +102,7 @@ if "df_results" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = 1
 
-# JSON flatten
+# Flatten JSON
 def flatten_json(data):
     flat = {}
     for key, value in data.items():
@@ -117,7 +116,7 @@ def flatten_json(data):
             flat[key] = value
     return flat
 
-# Amount extraction
+# Extract numeric value
 def extract_amount(amount_str):
     if not amount_str:
         return 0.0
@@ -127,7 +126,7 @@ def extract_amount(amount_str):
     except:
         return 0.0
 
-# Validation logic
+# Validate
 def evaluate_reimbursement(flat_data, level):
     cost = extract_amount(flat_data.get("Total Cost", "0"))
     rtype = flat_data.get("Type of Reimbursement", "").upper()
@@ -154,22 +153,18 @@ def try_fix_json(broken_json_str):
     cleaned = re.sub(r'\\n', '', cleaned)
     cleaned = re.sub(r'\s+', ' ', cleaned)
     cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
-
-    # ✅ Fix Python-style None to valid JSON null
     cleaned = re.sub(r'(?<=:\s)(None)(?=[,\}\]])', 'null', cleaned)
-
     return cleaned
 
+# Iconify validation
+def get_status_icon(val):
+    if isinstance(val, str) and val.startswith("PASS"):
+        return "✅ PASS"
+    elif isinstance(val, str) and val.startswith("FAIL"):
+        return "❌ " + val.replace("FAIL: ", "")
+    return val
 
-# Row color styling
-def highlight_row(row):
-    if isinstance(row["Validation Status"], str) and row["Validation Status"].startswith("PASS"):
-        return ['background-color: #d4edda; color: #155724'] * len(row)
-    elif isinstance(row["Validation Status"], str) and row["Validation Status"].startswith("FAIL"):
-        return ['background-color: #f8d7da; color: #721c24'] * len(row)
-    return [''] * len(row)
-
-# Process API + Display
+# Generate button
 if st.button("Generate"):
     if not email or not access_token:
         st.error("Missing credentials.")
@@ -211,6 +206,7 @@ if st.button("Generate"):
                     flat_data["File Name"] = file_name
                     flat_data["Category"] = category
                     flat_data["Validation Status"] = evaluate_reimbursement(flat_data, category)
+                    flat_data["Validation"] = get_status_icon(flat_data["Validation Status"])
                     rows.append(flat_data)
 
                 except Exception as e:
@@ -219,22 +215,24 @@ if st.button("Generate"):
                         "ERROR": f"API Error: {str(e)}",
                         "Raw Answer": "N/A",
                         "Category": category,
-                        "Validation Status": "FAIL: API Error"
+                        "Validation Status": "FAIL: API Error",
+                        "Validation": "❌ API Error"
                     })
 
         df = pd.DataFrame(rows)
-        cols = ["File Name", "Category", "Raw Answer", "Validation Status"] + [
-            col for col in df.columns if col not in ["File Name", "Raw Answer", "Category", "Validation Status"]
+        cols = ["File Name", "Category", "Validation", "Raw Answer"] + [
+            col for col in df.columns if col not in ["File Name", "Raw Answer", "Category", "Validation Status", "Validation"]
         ]
         df = df[cols]
-
         st.session_state.df_results = df
         st.session_state.data_ready = True
 
-# Display results with color
+# Show paginated results
 if st.session_state.data_ready and not st.session_state.df_results.empty:
     df = st.session_state.df_results
     st.success("✅ Documents processed.")
+
+    st.markdown("### 📊 Extracted & Validated Results")
 
     page_size = 5
     total_pages = (len(df) + page_size - 1) // page_size
@@ -253,11 +251,9 @@ if st.session_state.data_ready and not st.session_state.df_results.empty:
     start = (st.session_state.page - 1) * page_size
     end = start + page_size
 
-    styled_df = df.iloc[start:end].style.apply(highlight_row, axis=1)
-    st.markdown("### 📊 Extracted + Validated Results (Row Highlighted)")
-    st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
+    st.dataframe(df.iloc[start:end], use_container_width=True)
 
-    # Excel export
+    # Excel download
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Extracted Results')
