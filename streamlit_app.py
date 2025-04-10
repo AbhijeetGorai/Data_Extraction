@@ -11,7 +11,7 @@ st.title("📄 Reimbursement Data Extraction & Validation")
 # Reimbursement level selection
 category = st.selectbox("Select Reimbursement Category", ["L1 - Manager/Senior Manager", "L2 - Director and above"])
 
-# Show rules based on category
+# Reimbursement rules
 rules = {
     "L1 - Manager/Senior Manager": {
         "Travel": "Not allowed",
@@ -25,23 +25,21 @@ rules = {
     }
 }
 
-# Build and clean up the rules DataFrame (just in case)
+# Render rules table
 rules_df = pd.DataFrame(rules[category].items(), columns=["Category", "Limit"])
-rules_df["Category"] = rules_df["Category"].replace("Flight", "Travel")  # Safety patch
-rules_df = rules_df.replace("Flight", "Travel")  # In case it's in values accidentally
-
-# Render
+rules_df["Category"] = rules_df["Category"].replace("Flight", "Travel")
+rules_df = rules_df.replace("Flight", "Travel")
 st.markdown("### 🧾 Reimbursement Rules")
 st.table(rules_df)
 
-# Upload files
+# File uploader
 uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True, type=["pdf", "docx", "txt"])
 
-# Static credentials
+# Auth
 email = "abhijeet.gorai@origamis.ai"
 access_token = "gAAAAABnhKC-u2n1_mSWDlroFECWdd_qqplTHfPnplQncjC0B4A-oSxMplEf117Zd0uXSmiJKX-hS9UalpqS3CkQDmvGbhhKIvvfBt4QiBgOliL7_vl_FncrR9YkqLOTg5cL0T3pBOeNYpy5kEXbdgH9jAPJWP2yBw=="
 
-# Prompt (your original full prompt here)
+# Prompt
 prompt = """
 1.You are Finance Manager who oversee the reimbursement process in the company.
 2.Your task is to extract the following details from the Invoices:
@@ -97,9 +95,9 @@ For Example: If cost is mentioned as INR 7760, then you should format as Rs 7760
 	"Total Cost"
 }
 4. Remove the '\n' and '\t' characters from the output JSON structure
-"""
+"""  # keep unchanged
 
-# Session state setup
+# Session state
 if "data_ready" not in st.session_state:
     st.session_state.data_ready = False
 if "df_results" not in st.session_state:
@@ -107,7 +105,7 @@ if "df_results" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = 1
 
-# Helper: flatten nested JSON
+# Flatten JSON
 def flatten_json(data):
     flat = {}
     for key, value in data.items():
@@ -121,7 +119,7 @@ def flatten_json(data):
             flat[key] = value
     return flat
 
-# Helper: extract amount
+# Extract numeric value
 def extract_amount(amount_str):
     if not amount_str:
         return 0.0
@@ -131,12 +129,10 @@ def extract_amount(amount_str):
     except:
         return 0.0
 
-# ✅ Validation logic with generalized travel condition
+# Validation logic
 def evaluate_reimbursement(flat_data, level):
     cost = extract_amount(flat_data.get("Total Cost", "0"))
     rtype = flat_data.get("Type of Reimbursement", "").upper()
-    status = "PASS"
-
     travel_keywords = ["FLIGHT", "TAXI", "CAB", "AUTO", "RIDE", "TRAVEL", "TRAIN"]
 
     if level == "L1 - Manager/Senior Manager":
@@ -146,29 +142,32 @@ def evaluate_reimbursement(flat_data, level):
             return "FAIL: Hotel cost exceeds ₹3000 limit for L1"
         if "FOOD" in rtype and cost > 600:
             return "FAIL: Food cost exceeds ₹600 limit for L1"
-
     elif level == "L2 - Director and above":
         if rtype == "HOTEL_REIMBURSEMENT" and cost > 6000:
             return "FAIL: Hotel cost exceeds ₹6000 limit for L2"
         if "FOOD" in rtype and cost > 1200:
             return "FAIL: Food cost exceeds ₹1200 limit for L2"
 
-    return status
+    return "PASS"
 
-# Clean markdown-wrapped JSON
+# Fix malformed JSON
 def try_fix_json(broken_json_str):
     cleaned = broken_json_str.replace("```json", "").replace("```", "").strip()
     cleaned = re.sub(r'\\n', '', cleaned)
     cleaned = re.sub(r'\s+', ' ', cleaned)
     cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
-
-    # ✅ Fix Python-style None to valid JSON null
     cleaned = re.sub(r'(?<=:\s)(None)(?=[,\}\]])', 'null', cleaned)
-
     return cleaned
 
+# ✅ Full-row highlight function
+def highlight_row(row):
+    if isinstance(row["Validation Status"], str) and row["Validation Status"].startswith("PASS"):
+        return ['background-color: #d4edda; color: #155724'] * len(row)
+    elif isinstance(row["Validation Status"], str) and row["Validation Status"].startswith("FAIL"):
+        return ['background-color: #f8d7da; color: #721c24'] * len(row)
+    return [''] * len(row)
 
-# Process files
+# Generate button
 if st.button("Generate"):
     if not email or not access_token:
         st.error("Missing credentials.")
@@ -222,7 +221,9 @@ if st.button("Generate"):
                     })
 
         df = pd.DataFrame(rows)
-        cols = ["File Name", "Category", "Raw Answer", "Validation Status"] + [col for col in df.columns if col not in ["File Name", "Raw Answer", "Category", "Validation Status"]]
+        cols = ["File Name", "Category", "Raw Answer", "Validation Status"] + [
+            col for col in df.columns if col not in ["File Name", "Raw Answer", "Category", "Validation Status"]
+        ]
         df = df[cols]
 
         st.session_state.df_results = df
@@ -251,7 +252,9 @@ if st.session_state.data_ready and not st.session_state.df_results.empty:
 
     start = (st.session_state.page - 1) * page_size
     end = start + page_size
-    st.dataframe(df.iloc[start:end], use_container_width=True)
+
+    styled_df = df.style.apply(highlight_row, axis=1)
+    st.dataframe(styled_df, use_container_width=True)
 
     # Excel export
     output = BytesIO()
