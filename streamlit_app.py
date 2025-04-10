@@ -6,12 +6,13 @@ from io import BytesIO
 import re
 import demjson3
 
-st.title("📄 Data Extraction")
+st.title("📄 Reimbursement Data Extraction + Validation")
 
 # Auth inputs
 email = "abhijeet.gorai@origamis.ai"
 access_token = "gAAAAABnhKC-u2n1_mSWDlroFECWdd_qqplTHfPnplQncjC0B4A-oSxMplEf117Zd0uXSmiJKX-hS9UalpqS3CkQDmvGbhhKIvvfBt4QiBgOliL7_vl_FncrR9YkqLOTg5cL0T3pBOeNYpy5kEXbdgH9jAPJWP2yBw=="
 uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True, type=["pdf", "docx", "txt"])
+
 prompt = """
 1.You are Finance Manager who oversee the reimbursement process in the company.
 2.Your task is to extract the following details from the Invoices:
@@ -67,9 +68,9 @@ For Example: If cost is mentioned as INR 7760, then you should format as Rs 7760
 	"Total Cost"
 }
 4. Remove the '\n' and '\t' characters from the output JSON structure
-"""
+"""  # (keep your long prompt here exactly as it is)
 
-# Session state
+# Session state setup
 if "data_ready" not in st.session_state:
     st.session_state.data_ready = False
 if "df_results" not in st.session_state:
@@ -77,7 +78,7 @@ if "df_results" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = 1
 
-# 🔧 Flatten nested JSON
+# Helper to flatten nested JSON
 def flatten_json(data):
     flat = {}
     for key, value in data.items():
@@ -91,22 +92,51 @@ def flatten_json(data):
             flat[key] = value
     return flat
 
-# 🔧 JSON Repair using demjson3
+# Extract numeric value from "Total Cost"
+def extract_amount(amount_str):
+    if not amount_str:
+        return 0.0
+    digits = re.sub(r"[^\d.]", "", amount_str.replace(",", ""))
+    try:
+        return float(digits)
+    except:
+        return 0.0
+
+# Reimbursement validation logic
+def evaluate_reimbursement(flat_data):
+    cost = extract_amount(flat_data.get("Total Cost", "0"))
+    rtype = flat_data.get("Type of Reimbursement", "").upper()
+    name = flat_data.get("Name of the Particulars", "")
+
+    if rtype == "FLIGHT_REIMBURSEMENT":
+        if cost < 1000:
+            return "FAIL: Flight cost too low"
+    elif rtype == "CITY_RIDE_REIMBURSEMENT":
+        if cost > 1000:
+            return "FAIL: City ride cost too high"
+        if not name:
+            return "FAIL: Missing passenger name"
+    elif rtype == "HOTEL_REIMBURSEMENT":
+        if cost > 5000:
+            return "FAIL: Hotel cost too high"
+    return "PASS"
+
+# Clean raw JSON from API response
 def try_fix_json(broken_json_str):
     cleaned = broken_json_str.replace("```json", "").replace("```", "").strip()
     cleaned = re.sub(r'\\n', '', cleaned)
     cleaned = re.sub(r'\s+', ' ', cleaned)
     cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
-    return cleaned  # return cleaned raw string, demjson will handle parsing later
+    return cleaned
 
-# Process files
+# Button click
 if st.button("Generate"):
     if not email or not access_token:
         st.error("Please enter both Email ID and Access Token.")
     elif not uploaded_files:
         st.error("Please upload at least one document.")
     else:
-        api_url = "https://neptune.origamis.ai:9001/gear/process"  # Replace with your actual API
+        api_url = "https://neptune.origamis.ai:9001/gear/process"
         rows = []
         st.session_state.page = 1
 
@@ -139,29 +169,30 @@ if st.button("Generate"):
                         }
 
                     flat_data["File Name"] = file_name
+                    flat_data["Validation Status"] = evaluate_reimbursement(flat_data)
                     rows.append(flat_data)
 
                 except Exception as e:
                     rows.append({
                         "File Name": uploaded_file.name,
                         "ERROR": f"API Error: {str(e)}",
-                        "Raw Answer": "N/A"
+                        "Raw Answer": "N/A",
+                        "Validation Status": "FAIL: API Error"
                     })
 
         df = pd.DataFrame(rows)
-        cols = ["File Name", "Raw Answer"] + [col for col in df.columns if col not in ["File Name", "Raw Answer"]]
+        cols = ["File Name", "Raw Answer", "Validation Status"] + [col for col in df.columns if col not in ["File Name", "Raw Answer", "Validation Status"]]
         df = df[cols]
 
         st.session_state.df_results = df
         st.session_state.data_ready = True
 
-# Display UI
+# UI Preview & Download
 if st.session_state.data_ready and not st.session_state.df_results.empty:
     df = st.session_state.df_results
+    st.success("✅ All documents processed and validated.")
 
-    st.success("✅ All documents processed.")
-
-    st.markdown("### 📊 Extracted Results with Raw JSON")
+    st.markdown("### 📊 Extracted Results with Validation")
 
     page_size = 5
     total_rows = len(df)
@@ -183,7 +214,7 @@ if st.session_state.data_ready and not st.session_state.df_results.empty:
     end = start + page_size
     st.dataframe(df.iloc[start:end], use_container_width=True)
 
-    # Download Excel
+    # Excel export
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Extracted Results')
