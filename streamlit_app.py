@@ -14,12 +14,12 @@ category = st.selectbox("Select Reimbursement Category", ["L1 - Manager/Senior M
 # Show rules based on category
 rules = {
     "L1 - Manager/Senior Manager": {
-        "Flight": "Not allowed",
+        "Travel": "Not allowed",
         "Hotel (per night)": "Up to ₹3000",
         "Food (per day)": "Up to ₹600"
     },
     "L2 - Director and above": {
-        "Flight": "Allowed",
+        "Travel": "Allowed",
         "Hotel (per night)": "Up to ₹6000",
         "Food (per day)": "Up to ₹1200"
     }
@@ -35,7 +35,7 @@ uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True
 email = "abhijeet.gorai@origamis.ai"
 access_token = "gAAAAABnhKC-u2n1_mSWDlroFECWdd_qqplTHfPnplQncjC0B4A-oSxMplEf117Zd0uXSmiJKX-hS9UalpqS3CkQDmvGbhhKIvvfBt4QiBgOliL7_vl_FncrR9YkqLOTg5cL0T3pBOeNYpy5kEXbdgH9jAPJWP2yBw=="
 
-# Prompt (unchanged from original)
+# Prompt (your original full prompt here)
 prompt = """
 1.You are Finance Manager who oversee the reimbursement process in the company.
 2.Your task is to extract the following details from the Invoices:
@@ -91,7 +91,7 @@ For Example: If cost is mentioned as INR 7760, then you should format as Rs 7760
 	"Total Cost"
 }
 4. Remove the '\n' and '\t' characters from the output JSON structure
-"""  # Keep it as-is
+"""
 
 # Session state setup
 if "data_ready" not in st.session_state:
@@ -125,15 +125,17 @@ def extract_amount(amount_str):
     except:
         return 0.0
 
-# Validation logic
+# ✅ Validation logic with generalized travel condition
 def evaluate_reimbursement(flat_data, level):
     cost = extract_amount(flat_data.get("Total Cost", "0"))
     rtype = flat_data.get("Type of Reimbursement", "").upper()
     status = "PASS"
 
+    travel_keywords = ["FLIGHT", "TAXI", "CAB", "AUTO", "RIDE", "TRAVEL", "TRAIN"]
+
     if level == "L1 - Manager/Senior Manager":
-        if rtype == "FLIGHT_REIMBURSEMENT":
-            return "FAIL: Flight not allowed for L1"
+        if any(keyword in rtype for keyword in travel_keywords):
+            return "FAIL: Travel reimbursement not allowed for L1"
         if rtype == "HOTEL_REIMBURSEMENT" and cost > 3000:
             return "FAIL: Hotel cost exceeds ₹3000 limit for L1"
         if "FOOD" in rtype and cost > 600:
@@ -215,7 +217,7 @@ if st.button("Generate"):
         st.session_state.df_results = df
         st.session_state.data_ready = True
 
-# Show table and Excel
+# Show results
 if st.session_state.data_ready and not st.session_state.df_results.empty:
     df = st.session_state.df_results
     st.success("✅ Documents processed.")
@@ -240,7 +242,7 @@ if st.session_state.data_ready and not st.session_state.df_results.empty:
     end = start + page_size
     st.dataframe(df.iloc[start:end], use_container_width=True)
 
-    # Excel download
+    # Excel export
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Extracted Results')
