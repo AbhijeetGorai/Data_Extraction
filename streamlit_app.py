@@ -12,7 +12,7 @@ st.title("📄 Reimbursement Data Extraction & Validation")
 # Category selection
 category = st.selectbox("Select Reimbursement Category", ["L1 - Manager/Senior Manager", "L2 - Director and above"])
 
-# Rules
+# Rules definition
 rules = {
     "L1 - Manager/Senior Manager": {
         "Travel": "Not allowed",
@@ -29,14 +29,14 @@ rules_df = pd.DataFrame(rules[category].items(), columns=["Category", "Limit"])
 st.markdown("### 🧾 Reimbursement Rules")
 st.table(rules_df)
 
-# Upload
+# Upload files
 uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True, type=["pdf", "docx", "txt"])
 
-# Auth
+# Credentials
 email = "abhijeet.gorai@origamis.ai"
-access_token = "gAAAAABnhKC-u2n1_mSWDlroFECWdd_qqplTHfPnplQncjC0B4A-oSxMplEf117Zd0uXSmiJKX-hS9UalpqS3CkQDmvGbhhKIvvfBt4QiBgOliL7_vl_FncrR9YkqLOTg5cL0T3pBOeNYpy5kEXbdgH9jAPJWP2yBw=="
+access_token = "gAAAAABnhKC-u2n1_mSWDlroFECWdd_qqplTHfPnplQncjC0B4A-oSxMplEf117Zd0uXSmiJKX-hS9UalpqS3CkQDmvGbhhKIvvfBt4QiBgOliL7_vl_FncrR9YkqLOTg5cL0T3pBOeNYpy5kEXbdgH9jAPJWP2yBw=="  # Your actual token
 
-# Prompt (same as before)
+# Prompt (your custom full prompt goes here)
 prompt = """
 1.You are Finance Manager who oversee the reimbursement process in the company.
 2.Your task is to extract the following details from the Invoices:
@@ -94,7 +94,7 @@ For Example: If cost is mentioned as INR 7760, then you should format as Rs 7760
 4. Remove the '\n' and '\t' characters from the output JSON structure
 """
 
-# Session
+# Session state
 if "data_ready" not in st.session_state:
     st.session_state.data_ready = False
 if "df_results" not in st.session_state:
@@ -126,7 +126,7 @@ def extract_amount(amount_str):
     except:
         return 0.0
 
-# Validate
+# Validation logic
 def evaluate_reimbursement(flat_data, level):
     cost = extract_amount(flat_data.get("Total Cost", "0"))
     rtype = flat_data.get("Type of Reimbursement", "").upper()
@@ -147,16 +147,17 @@ def evaluate_reimbursement(flat_data, level):
 
     return "PASS"
 
-# Clean malformed JSON
+# Clean and flatten JSON string
 def try_fix_json(broken_json_str):
     cleaned = broken_json_str.replace("```json", "").replace("```", "").strip()
     cleaned = re.sub(r'\\n', '', cleaned)
+    cleaned = re.sub(r'[\t\r\n]+', ' ', cleaned)  # make it one line
     cleaned = re.sub(r'\s+', ' ', cleaned)
     cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
     cleaned = re.sub(r'(?<=:\s)(None)(?=[,\}\]])', 'null', cleaned)
     return cleaned
 
-# Iconify validation
+# Status icon for display
 def get_status_icon(val):
     if isinstance(val, str) and val.startswith("PASS"):
         return "✅ PASS"
@@ -164,7 +165,7 @@ def get_status_icon(val):
         return "❌ " + val.replace("FAIL: ", "")
     return val
 
-# Generate button
+# Process files
 if st.button("Generate"):
     if not email or not access_token:
         st.error("Missing credentials.")
@@ -224,10 +225,11 @@ if st.button("Generate"):
             col for col in df.columns if col not in ["File Name", "Raw Answer", "Category", "Validation Status", "Validation"]
         ]
         df = df[cols]
+
         st.session_state.df_results = df
         st.session_state.data_ready = True
 
-# Show paginated results
+# Display table
 if st.session_state.data_ready and not st.session_state.df_results.empty:
     df = st.session_state.df_results
     st.success("✅ Documents processed.")
@@ -236,24 +238,23 @@ if st.session_state.data_ready and not st.session_state.df_results.empty:
 
     page_size = 5
     total_pages = (len(df) + page_size - 1) // page_size
-    if total_pages > 1:
-        selected_page = st.selectbox(
-            "Select page:",
-            options=list(range(1, total_pages + 1)),
-            index=st.session_state.page - 1,
-            format_func=lambda x: f"Page {x} of {total_pages}",
-            key="page_selector"
-        )
-        st.session_state.page = selected_page
-    else:
-        st.session_state.page = 1
+    selected_page = st.selectbox(
+        "Select page:",
+        options=list(range(1, total_pages + 1)),
+        index=st.session_state.page - 1,
+        format_func=lambda x: f"Page {x} of {total_pages}",
+        key="page_selector"
+    )
+    st.session_state.page = selected_page
 
-    start = (st.session_state.page - 1) * page_size
+    start = (selected_page - 1) * page_size
     end = start + page_size
+    page_df = df.iloc[start:end]
 
-    st.dataframe(df.iloc[start:end], use_container_width=True)
+    # Use st.dataframe for interactive compact layout
+    st.dataframe(page_df, use_container_width=True)
 
-    # Excel download
+    # Excel export
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Extracted Results')
