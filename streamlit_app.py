@@ -154,8 +154,12 @@ def try_fix_json(broken_json_str):
     cleaned = re.sub(r'\\n', '', cleaned)
     cleaned = re.sub(r'\s+', ' ', cleaned)
     cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
+
+    # ✅ Fix Python-style None to valid JSON null
     cleaned = re.sub(r'(?<=:\s)(None)(?=[,\}\]])', 'null', cleaned)
+
     return cleaned
+
 
 # Row color styling
 def highlight_row(row):
