@@ -6,13 +6,36 @@ from io import BytesIO
 import re
 import demjson3
 
-st.title("📄 Reimbursement Data Extraction + Validation")
+st.title("📄 Reimbursement Data Extraction & Validation")
 
-# Auth inputs
-email = "abhijeet.gorai@origamis.ai"
-access_token = "gAAAAABnhKC-u2n1_mSWDlroFECWdd_qqplTHfPnplQncjC0B4A-oSxMplEf117Zd0uXSmiJKX-hS9UalpqS3CkQDmvGbhhKIvvfBt4QiBgOliL7_vl_FncrR9YkqLOTg5cL0T3pBOeNYpy5kEXbdgH9jAPJWP2yBw=="
+# Reimbursement level selection
+category = st.selectbox("Select Reimbursement Category", ["L1 - Manager/Senior Manager", "L2 - Director and above"])
+
+# Show rules based on category
+rules = {
+    "L1 - Manager/Senior Manager": {
+        "Flight": "Not allowed",
+        "Hotel (per night)": "Up to ₹3000",
+        "Food (per day)": "Up to ₹600"
+    },
+    "L2 - Director and above": {
+        "Flight": "Allowed",
+        "Hotel (per night)": "Up to ₹6000",
+        "Food (per day)": "Up to ₹1200"
+    }
+}
+rules_df = pd.DataFrame(rules[category].items(), columns=["Category", "Limit"])
+st.markdown("### 🧾 Reimbursement Rules")
+st.table(rules_df)
+
+# Upload files
 uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True, type=["pdf", "docx", "txt"])
 
+# Static credentials
+email = "abhijeet.gorai@origamis.ai"
+access_token = "gAAAAABnhKC-u2n1_mSWDlroFECWdd_qqplTHfPnplQncjC0B4A-oSxMplEf117Zd0uXSmiJKX-hS9UalpqS3CkQDmvGbhhKIvvfBt4QiBgOliL7_vl_FncrR9YkqLOTg5cL0T3pBOeNYpy5kEXbdgH9jAPJWP2yBw=="
+
+# Prompt (unchanged from original)
 prompt = """
 1.You are Finance Manager who oversee the reimbursement process in the company.
 2.Your task is to extract the following details from the Invoices:
@@ -68,7 +91,7 @@ For Example: If cost is mentioned as INR 7760, then you should format as Rs 7760
 	"Total Cost"
 }
 4. Remove the '\n' and '\t' characters from the output JSON structure
-"""  # (keep your long prompt here exactly as it is)
+"""  # Keep it as-is
 
 # Session state setup
 if "data_ready" not in st.session_state:
@@ -78,7 +101,7 @@ if "df_results" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = 1
 
-# Helper to flatten nested JSON
+# Helper: flatten nested JSON
 def flatten_json(data):
     flat = {}
     for key, value in data.items():
@@ -92,7 +115,7 @@ def flatten_json(data):
             flat[key] = value
     return flat
 
-# Extract numeric value from "Total Cost"
+# Helper: extract amount
 def extract_amount(amount_str):
     if not amount_str:
         return 0.0
@@ -102,26 +125,29 @@ def extract_amount(amount_str):
     except:
         return 0.0
 
-# Reimbursement validation logic
-def evaluate_reimbursement(flat_data):
+# Validation logic
+def evaluate_reimbursement(flat_data, level):
     cost = extract_amount(flat_data.get("Total Cost", "0"))
     rtype = flat_data.get("Type of Reimbursement", "").upper()
-    name = flat_data.get("Name of the Particulars", "")
+    status = "PASS"
 
-    if rtype == "FLIGHT_REIMBURSEMENT":
-        if cost < 1000:
-            return "FAIL: Flight cost too low"
-    elif rtype == "CITY_RIDE_REIMBURSEMENT":
-        if cost > 1000:
-            return "FAIL: City ride cost too high"
-        if not name:
-            return "FAIL: Missing passenger name"
-    elif rtype == "HOTEL_REIMBURSEMENT":
-        if cost > 5000:
-            return "FAIL: Hotel cost too high"
-    return "PASS"
+    if level == "L1 - Manager/Senior Manager":
+        if rtype == "FLIGHT_REIMBURSEMENT":
+            return "FAIL: Flight not allowed for L1"
+        if rtype == "HOTEL_REIMBURSEMENT" and cost > 3000:
+            return "FAIL: Hotel cost exceeds ₹3000 limit for L1"
+        if "FOOD" in rtype and cost > 600:
+            return "FAIL: Food cost exceeds ₹600 limit for L1"
 
-# Clean raw JSON from API response
+    elif level == "L2 - Director and above":
+        if rtype == "HOTEL_REIMBURSEMENT" and cost > 6000:
+            return "FAIL: Hotel cost exceeds ₹6000 limit for L2"
+        if "FOOD" in rtype and cost > 1200:
+            return "FAIL: Food cost exceeds ₹1200 limit for L2"
+
+    return status
+
+# Clean markdown-wrapped JSON
 def try_fix_json(broken_json_str):
     cleaned = broken_json_str.replace("```json", "").replace("```", "").strip()
     cleaned = re.sub(r'\\n', '', cleaned)
@@ -129,18 +155,18 @@ def try_fix_json(broken_json_str):
     cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
     return cleaned
 
-# Button click
+# Process files
 if st.button("Generate"):
     if not email or not access_token:
-        st.error("Please enter both Email ID and Access Token.")
+        st.error("Missing credentials.")
     elif not uploaded_files:
-        st.error("Please upload at least one document.")
+        st.error("Please upload documents.")
     else:
         api_url = "https://neptune.origamis.ai:9001/gear/process"
         rows = []
         st.session_state.page = 1
 
-        with st.spinner("Processing all documents..."):
+        with st.spinner("Processing..."):
             for uploaded_file in uploaded_files:
                 try:
                     uploaded_file.seek(0)
@@ -164,12 +190,13 @@ if st.button("Generate"):
                         flat_data["Raw Answer"] = raw_cleaned
                     except Exception as e:
                         flat_data = {
-                            "ERROR": f"Could not fully parse JSON: {str(e)}",
+                            "ERROR": f"Parse Error: {str(e)}",
                             "Raw Answer": raw_cleaned
                         }
 
                     flat_data["File Name"] = file_name
-                    flat_data["Validation Status"] = evaluate_reimbursement(flat_data)
+                    flat_data["Category"] = category
+                    flat_data["Validation Status"] = evaluate_reimbursement(flat_data, category)
                     rows.append(flat_data)
 
                 except Exception as e:
@@ -177,27 +204,26 @@ if st.button("Generate"):
                         "File Name": uploaded_file.name,
                         "ERROR": f"API Error: {str(e)}",
                         "Raw Answer": "N/A",
+                        "Category": category,
                         "Validation Status": "FAIL: API Error"
                     })
 
         df = pd.DataFrame(rows)
-        cols = ["File Name", "Raw Answer", "Validation Status"] + [col for col in df.columns if col not in ["File Name", "Raw Answer", "Validation Status"]]
+        cols = ["File Name", "Category", "Raw Answer", "Validation Status"] + [col for col in df.columns if col not in ["File Name", "Raw Answer", "Category", "Validation Status"]]
         df = df[cols]
 
         st.session_state.df_results = df
         st.session_state.data_ready = True
 
-# UI Preview & Download
+# Show table and Excel
 if st.session_state.data_ready and not st.session_state.df_results.empty:
     df = st.session_state.df_results
-    st.success("✅ All documents processed and validated.")
+    st.success("✅ Documents processed.")
 
-    st.markdown("### 📊 Extracted Results with Validation")
+    st.markdown("### 📊 Extracted + Validated Results")
 
     page_size = 5
-    total_rows = len(df)
-    total_pages = (total_rows + page_size - 1) // page_size
-
+    total_pages = (len(df) + page_size - 1) // page_size
     if total_pages > 1:
         selected_page = st.selectbox(
             "Select page:",
@@ -214,16 +240,16 @@ if st.session_state.data_ready and not st.session_state.df_results.empty:
     end = start + page_size
     st.dataframe(df.iloc[start:end], use_container_width=True)
 
-    # Excel export
+    # Excel download
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Extracted Results')
     output.seek(0)
 
-    st.markdown("### 📥 Download Extracted Data")
+    st.markdown("### 📥 Download Results")
     st.download_button(
         label="Download Excel File",
         data=output,
-        file_name="extracted_data.xlsx",
+        file_name="extracted_results.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
