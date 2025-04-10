@@ -24,7 +24,13 @@ rules = {
         "Food (per day)": "Up to ₹1200"
     }
 }
+
+# Build and clean up the rules DataFrame (just in case)
 rules_df = pd.DataFrame(rules[category].items(), columns=["Category", "Limit"])
+rules_df["Category"] = rules_df["Category"].replace("Flight", "Travel")  # Safety patch
+rules_df = rules_df.replace("Flight", "Travel")  # In case it's in values accidentally
+
+# Render
 st.markdown("### 🧾 Reimbursement Rules")
 st.table(rules_df)
 
