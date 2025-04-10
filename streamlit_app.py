@@ -25,21 +25,21 @@ rules = {
     }
 }
 
-# Render rules table
+# Show rules
 rules_df = pd.DataFrame(rules[category].items(), columns=["Category", "Limit"])
 rules_df["Category"] = rules_df["Category"].replace("Flight", "Travel")
 rules_df = rules_df.replace("Flight", "Travel")
 st.markdown("### 🧾 Reimbursement Rules")
 st.table(rules_df)
 
-# File uploader
+# File upload
 uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True, type=["pdf", "docx", "txt"])
 
 # Auth
 email = "abhijeet.gorai@origamis.ai"
 access_token = "gAAAAABnhKC-u2n1_mSWDlroFECWdd_qqplTHfPnplQncjC0B4A-oSxMplEf117Zd0uXSmiJKX-hS9UalpqS3CkQDmvGbhhKIvvfBt4QiBgOliL7_vl_FncrR9YkqLOTg5cL0T3pBOeNYpy5kEXbdgH9jAPJWP2yBw=="
 
-# Prompt
+# Prompt (your existing one)
 prompt = """
 1.You are Finance Manager who oversee the reimbursement process in the company.
 2.Your task is to extract the following details from the Invoices:
@@ -167,7 +167,7 @@ def highlight_row(row):
         return ['background-color: #f8d7da; color: #721c24'] * len(row)
     return [''] * len(row)
 
-# Generate button
+# Process button
 if st.button("Generate"):
     if not email or not access_token:
         st.error("Missing credentials.")
@@ -234,7 +234,7 @@ if st.session_state.data_ready and not st.session_state.df_results.empty:
     df = st.session_state.df_results
     st.success("✅ Documents processed.")
 
-    st.markdown("### 📊 Extracted + Validated Results")
+    st.markdown("### 📊 Extracted + Validated Results (Row Highlighted)")
 
     page_size = 5
     total_pages = (len(df) + page_size - 1) // page_size
@@ -253,8 +253,9 @@ if st.session_state.data_ready and not st.session_state.df_results.empty:
     start = (st.session_state.page - 1) * page_size
     end = start + page_size
 
-    styled_df = df.style.apply(highlight_row, axis=1)
-    st.dataframe(styled_df, use_container_width=True)
+    # ✅ Full-row color styled DataFrame
+    styled_df = df.iloc[start:end].style.apply(highlight_row, axis=1)
+    st.write(styled_df)
 
     # Excel export
     output = BytesIO()
