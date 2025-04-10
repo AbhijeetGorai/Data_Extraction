@@ -8,10 +8,10 @@ import demjson3
 
 st.title("📄 Reimbursement Data Extraction & Validation")
 
-# Reimbursement level selection
+# Category selection
 category = st.selectbox("Select Reimbursement Category", ["L1 - Manager/Senior Manager", "L2 - Director and above"])
 
-# Reimbursement rules
+# Rules definition
 rules = {
     "L1 - Manager/Senior Manager": {
         "Travel": "Not allowed",
@@ -25,21 +25,19 @@ rules = {
     }
 }
 
-# Show rules
+# Display rule table
 rules_df = pd.DataFrame(rules[category].items(), columns=["Category", "Limit"])
-rules_df["Category"] = rules_df["Category"].replace("Flight", "Travel")
-rules_df = rules_df.replace("Flight", "Travel")
 st.markdown("### 🧾 Reimbursement Rules")
 st.table(rules_df)
 
-# File upload
+# Upload files
 uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True, type=["pdf", "docx", "txt"])
 
-# Auth
+# Credentials
 email = "abhijeet.gorai@origamis.ai"
 access_token = "gAAAAABnhKC-u2n1_mSWDlroFECWdd_qqplTHfPnplQncjC0B4A-oSxMplEf117Zd0uXSmiJKX-hS9UalpqS3CkQDmvGbhhKIvvfBt4QiBgOliL7_vl_FncrR9YkqLOTg5cL0T3pBOeNYpy5kEXbdgH9jAPJWP2yBw=="
 
-# Prompt (your existing one)
+# Prompt (your long custom prompt)
 prompt = """
 1.You are Finance Manager who oversee the reimbursement process in the company.
 2.Your task is to extract the following details from the Invoices:
@@ -95,7 +93,7 @@ For Example: If cost is mentioned as INR 7760, then you should format as Rs 7760
 	"Total Cost"
 }
 4. Remove the '\n' and '\t' characters from the output JSON structure
-"""  # keep unchanged
+"""  # Replace with actual
 
 # Session state
 if "data_ready" not in st.session_state:
@@ -105,7 +103,7 @@ if "df_results" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = 1
 
-# Flatten JSON
+# JSON flatten
 def flatten_json(data):
     flat = {}
     for key, value in data.items():
@@ -119,7 +117,7 @@ def flatten_json(data):
             flat[key] = value
     return flat
 
-# Extract numeric value
+# Amount extraction
 def extract_amount(amount_str):
     if not amount_str:
         return 0.0
@@ -150,7 +148,7 @@ def evaluate_reimbursement(flat_data, level):
 
     return "PASS"
 
-# Fix malformed JSON
+# Clean malformed JSON
 def try_fix_json(broken_json_str):
     cleaned = broken_json_str.replace("```json", "").replace("```", "").strip()
     cleaned = re.sub(r'\\n', '', cleaned)
@@ -159,7 +157,7 @@ def try_fix_json(broken_json_str):
     cleaned = re.sub(r'(?<=:\s)(None)(?=[,\}\]])', 'null', cleaned)
     return cleaned
 
-# ✅ Full-row highlight function
+# Row color styling
 def highlight_row(row):
     if isinstance(row["Validation Status"], str) and row["Validation Status"].startswith("PASS"):
         return ['background-color: #d4edda; color: #155724'] * len(row)
@@ -167,7 +165,7 @@ def highlight_row(row):
         return ['background-color: #f8d7da; color: #721c24'] * len(row)
     return [''] * len(row)
 
-# Process button
+# Process API + Display
 if st.button("Generate"):
     if not email or not access_token:
         st.error("Missing credentials.")
@@ -229,12 +227,10 @@ if st.button("Generate"):
         st.session_state.df_results = df
         st.session_state.data_ready = True
 
-# Show results
+# Display results with color
 if st.session_state.data_ready and not st.session_state.df_results.empty:
     df = st.session_state.df_results
     st.success("✅ Documents processed.")
-
-    st.markdown("### 📊 Extracted + Validated Results (Row Highlighted)")
 
     page_size = 5
     total_pages = (len(df) + page_size - 1) // page_size
@@ -253,9 +249,9 @@ if st.session_state.data_ready and not st.session_state.df_results.empty:
     start = (st.session_state.page - 1) * page_size
     end = start + page_size
 
-    # ✅ Full-row color styled DataFrame
     styled_df = df.iloc[start:end].style.apply(highlight_row, axis=1)
-    st.write(styled_df)
+    st.markdown("### 📊 Extracted + Validated Results (Row Highlighted)")
+    st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
 
     # Excel export
     output = BytesIO()
